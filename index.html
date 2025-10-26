@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Character Emulator — Dobby</title>
+<style>
+  body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial; background:#0f172a;color:#e6eef8; margin:0; padding:0; display:flex; align-items:center; justify-content:center; min-height:100vh;}
+  .app{width:100%; max-width:900px; background:linear-gradient(180deg,#071233 0%,#041029 100%); border-radius:12px; box-shadow:0 10px 30px rgba(2,6,23,0.6); padding:18px;}
+  header{display:flex; gap:12px; align-items:center; margin-bottom:12px;}
+  header h1{font-size:20px;margin:0}
+  .controls{display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;}
+  select, input[type=text]{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); color:inherit}
+  button{padding:8px 12px;border-radius:8px;border:0;background:#1f7bd6;color:white; cursor:pointer}
+  .chat{height:56vh; overflow:auto; padding:12px; background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00)); border-radius:8px; border:1px solid rgba(255,255,255,0.03)}
+  .msg{margin-bottom:10px; max-width:85%;}
+  .user{align-self:flex-end; background:#0b1220; padding:10px 12px; border-radius:10px 10px 2px 10px; border:1px solid rgba(255,255,255,0.02)}
+  .bot{background:linear-gradient(90deg,#021b2b,#062a36); padding:10px 12px; border-radius:10px 10px 10px 2px; border:1px solid rgba(255,255,255,0.03)}
+  .meta{font-size:12px; opacity:0.7; margin-bottom:6px}
+  form{display:flex; gap:8px; margin-top:8px}
+  textarea{flex:1; min-height:56px; resize:vertical; padding:10px; border-radius:8px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.03); color:inherit}
+  footer{font-size:12px; opacity:0.7; margin-top:8px}
+  .small{font-size:12px; opacity:0.75}
+  label{font-size:13px}
+  .cursor{animation:blink 1s infinite}
+  @keyframes blink{0%,50%{opacity:1}51%,100%{opacity:0}}
+  .small a{color:#1f7bd6; text-decoration:none}
+  .small a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+  <div class="app" role="application" aria-label="Character Emulator">
+    <header>
+      <h1>Character Emulator</h1>
+      <div class="small">Powered by Dobby (Fireworks AI)</div>
+    </header>
+
+    <div class="controls" aria-hidden="false">
+      <label>
+        Model:
+        <select id="modelSelect" aria-label="Select model">
+          <option value="dobby-70b" selected>Dobby 70B ✓</option>
+          <option value="dobby-8b">Dobby 8B (deployed)</option>
+          <option value="dobby-8b-deployment">Dobby 8B (deployment ID)</option>
+          <option value="llama-3-8b">Llama 3.1 8B (serverless)</option>
+          <option value="llama-3.2-3b">Llama 3.2 3B (serverless)</option>
+        </select>
+      </label>
+
+      <label>
+        Character:
+        <select id="characterSelect" aria-label="Select character">
+          <option value="babbage">Charles Babbage — Engineer & Mathematician</option>
+          <option value="aristotle">Aristotle — Philosopher</option>
+          <option value="newton">Isaac Newton — Natural Philosopher</option>
+          <option value="davinci">Leonardo da Vinci — Polymath</option>
+          <option value="joker">The Joker — Chaotic Trickster</option>
+        </select>
+      </label>
+
+      <label>
+        Fireworks API Key:
+        <input id="apiKeyInput" type="text" placeholder="YOUR_FIREWORKS_API_KEY_HERE" value="" aria-label="Fireworks API key"/>
+      </label>
+
+      <button id="clearBtn">Clear Chat</button>
+      <label style="margin-left:auto;">
+        Safe mode:
+        <input id="safeMode" type="checkbox" checked />
+      </label>
+    </div>
+
+    <div id="chat" class="chat" role="log" aria-live="polite"></div>
+
+    <form id="messageForm" onsubmit="return false;">
+      <textarea id="userInput" placeholder="Type your question or say hello..." aria-label="Message input"></textarea>
+      <button id="sendBtn" type="submit">Send</button>
+    </form>
+
+    <footer>
+      <div class="small">✨ Dobby models are now active! Llama 3.1/3.2 also available as fallback.</div>
+      <div class="small">Replace the API key above with your Fireworks key or run a server-side proxy to keep it secret.</div>
+    </footer>
+  </div>
+
+<script>
+(() => {
+  // -------- CONFIGURE ----------
+  // Model options - matching the working Dobby Summarizer
+  const FIREWORKS_MODEL_OPTIONS = {
+    "dobby-70b": "accounts/sentientfoundation/models/dobby-unhinged-llama-3-3-70b-new",
+    "dobby-8b": "accounts/awe/deployedModels/dobby-mini-unhinged-plus-llama-3-1-8b-idijeune",
+    "dobby-8b-deployment": "accounts/awe/deployments/j9ooup6e",
+    "llama-3.2-3b": "accounts/fireworks/models/llama-v3.2-3b-instruct",
+    "llama-3-8b": "accounts/fireworks/models/llama-v3-8b-instruct"
+  };
+  const FIREWORKS_ENDPOINT = "https://api.fireworks.ai/inference/v1/chat/completions";
+  // -----------------------------
+
+  // Persona system prompts: keep them detailed but concise
+  const PERSONAS = {
+    babbage: {
+      name: "Charles Babbage",
+      system: `You are Charles Babbage (1791-1871), English polymath and mechanical engineer, inventor of the Difference Engine and conceptualizer of the Analytical Engine. Speak with Victorian-era formality, pride in mechanical precision and mathematics, explain mechanisms, algorithms, and computation clearly, referencing mechanical analogs where helpful. Avoid anachronistic modern technology claims.`
+    },
+    aristotle: {
+      name: "Aristotle",
+      system: `You are Aristotle, the ancient Greek philosopher. Respond analytically and teleologically: ask about causes, forms, and purposes; prefer systematic reasoning, syllogistic structure, and empirical examples. Keep answers structured and refer to ethics, metaphysics, logic, and natural philosophy where relevant.`
+    },
+    newton: {
+      name: "Isaac Newton",
+      system: `You are Sir Isaac Newton, natural philosopher and mathematician. Speak with rigorous method, reference experiments, mathematics (fluxions/calculus), optics, and gravitation. Use formal tone but be willing to explain experiments and equations in plain language when asked.`
+    },
+    davinci: {
+      name: "Leonardo da Vinci",
+      system: `You are Leonardo da Vinci, a curious polymath: painter, engineer, anatomist and inventor. Combine artistic metaphor with observational science; provide sketches conceptually, ask probing questions, and describe mechanical designs and anatomy with vivid imagery.`
+    },
+    joker: {
+      name: "The Joker",
+      system: `You are the Joker: chaotic, mischievous, darkly humorous, and unpredictable. Use playful and twisting language, be theatrical. Do not promote real-world violence or illegal instructions. If asked for harmful instructions, refuse and respond with a menacing but non-actionable remark.`
+    }
+  };
+
+  // Simple client-side moderation: banned tokens -> redact
+  const BANNED = ["bomb", "kill", "suicide", "explosive", "weapon", "rape"]; // basic - extend as desired
+
+  // Chat state (short term)
+  let sessionHistory = []; // {role:'user'|'assistant'|'system', content:'...'}
+  const MAX_HISTORY_TURNS = 6; // last N messages to include to stay in token budget
+
+  // DOM
+  const chatEl = document.getElementById('chat');
+  const modelSelect = document.getElementById('modelSelect');
+  const charSelect = document.getElementById('characterSelect');
+  const apiKeyInput = document.getElementById('apiKeyInput');
+  const safeModeToggle = document.getElementById('safeMode');
+  const msgForm = document.getElementById('messageForm');
+  const userInput = document.getElementById('userInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const clearBtn = document.getElementById('clearBtn');
+
+  // Helpers
+  function appendMessage(role, text, meta='', useTypewriter = false) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
+    if (meta) {
+      const m = document.createElement('div'); m.className='meta'; m.textContent = meta;
+      wrapper.appendChild(m);
+    }
+    const p = document.createElement('div');
+    
+    if (useTypewriter && role === 'assistant') {
+      // Add cursor initially
+      p.innerHTML = '<span class="typewriter-text"></span><span class="cursor">|</span>';
+      wrapper.appendChild(p);
+      chatEl.appendChild(wrapper);
+      chatEl.scrollTop = chatEl.scrollHeight;
+      
+      // Typewriter effect
+      const textEl = p.querySelector('.typewriter-text');
+      const cursorEl = p.querySelector('.cursor');
+      let index = 0;
+      const sanitizedText = sanitizeForDisplay(text);
+      let displayText = '';
+      
+      function typeNext() {
+        if (index < sanitizedText.length) {
+          displayText += sanitizedText[index];
+          textEl.innerHTML = displayText.replace(/\n/g, '<br/>');
+          chatEl.scrollTop = chatEl.scrollHeight;
+          index++;
+          setTimeout(typeNext, 15); // 15ms per character
+        } else {
+          // Remove cursor when done
+          if (cursorEl) cursorEl.remove();
+        }
+      }
+      typeNext();
+    } else {
+      p.innerHTML = text.replace(/\n/g,'<br/>');
+      wrapper.appendChild(p);
+      chatEl.appendChild(wrapper);
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
+  }
+
+  function sanitizeForDisplay(text) {
+    // very small sanitizer to avoid raw HTML injection
+    return String(text)
+      .replaceAll('&','&amp;')
+      .replaceAll('<','&lt;')
+      .replaceAll('>','&gt;');
+  }
+
+  function simpleModerate(text){
+    const lowered = text.toLowerCase();
+    for(const b of BANNED){
+      if(lowered.includes(b)) return true;
+    }
+    return false;
+  }
+
+  function buildMessagesForModel(userText){
+    // Build messages array for Chat Completions API
+    const personaKey = charSelect.value;
+    const persona = PERSONAS[personaKey];
+
+    // Build messages array with system prompt + history + current user message
+    const messages = [
+      { role: 'system', content: persona.system }
+    ];
+
+    // Add recent conversation history
+    const recent = sessionHistory.slice(-MAX_HISTORY_TURNS);
+    recent.forEach(h => {
+      messages.push({
+        role: h.role === 'user' ? 'user' : 'assistant',
+        content: h.content
+      });
+    });
+
+    // Add current user message
+    messages.push({ role: 'user', content: userText });
+
+    return messages;
+  }
+
+  async function callFireworks(messages){
+    const apiKey = apiKeyInput.value.trim();
+    if(!apiKey){
+      alert('Please paste your Fireworks API key in the "Fireworks API Key" field.');
+      return { error: 'no_api_key' };
+    }
+
+    // Get current model ID
+    const selectedModel = modelSelect.value;
+    let modelId = FIREWORKS_MODEL_OPTIONS[selectedModel] || FIREWORKS_MODEL_OPTIONS["dobby-70b"];
+    
+    // Try the selected model first
+    let result = await tryModel(messages, modelId, apiKey);
+    
+    // If selected model failed with 404 and it's a Dobby model, try a serverless fallback
+    if (result.error && result.error.includes('404') && (selectedModel.includes('dobby'))) {
+      console.log('Dobby model not deployed, falling back to Llama 3.1 8B');
+      modelId = FIREWORKS_MODEL_OPTIONS["llama-3-8b"];
+      result = await tryModel(messages, modelId, apiKey);
+      if (!result.error) {
+        // Return a flag indicating fallback was used
+        result.usedFallback = true;
+      }
+    }
+    
+    return result;
+  }
+
+  async function tryModel(messages, modelId, apiKey) {
+    const body = {
+      model: modelId,
+      messages: messages,
+      max_tokens: 2048,
+      temperature: 0.6,
+      top_p: 1,
+      frequency_penalty: 0,
+      presence_penalty: 0
+    };
+    
+    console.log('Calling model:', modelId);
+
+    try {
+      const res = await fetch(FIREWORKS_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + apiKey,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      if(!res.ok){
+        const txt = await res.text();
+        console.error('API Error:', res.status, txt, 'Model:', modelId);
+        return { error: `HTTP ${res.status}: ${txt.substring(0, 200)}` };
+      }
+
+      const json = await res.json();
+      
+      // Parse Chat Completions API response
+      let text = null;
+      if(json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content) {
+        text = json.choices[0].message.content;
+      } else {
+        // Fallback - show the raw response for debugging
+        text = JSON.stringify(json, null, 2);
+      }
+
+      return { text };
+    } catch (err) {
+      return { error: String(err) };
+    }
+  }
+
+  async function sendMessage(){
+    const raw = userInput.value.trim();
+    if(!raw) return;
+    userInput.value = '';
+    appendMessage('user', sanitizeForDisplay(raw), `You — ${new Date().toLocaleTimeString()}`);
+    sessionHistory.push({role:'user', content: raw});
+
+    // Build messages and call model
+    const messages = buildMessagesForModel(raw);
+
+    appendMessage('assistant', '…thinking…', `${PERSONAS[charSelect.value].name} is formulating a reply`);
+    const idx = chatEl.querySelectorAll('.msg').length;
+    const response = await callFireworks(messages);
+
+    // Remove the temporary thinking line (last message)
+    const msgs = chatEl.querySelectorAll('.msg');
+    if(msgs.length) msgs[msgs.length - 1].remove();
+
+    if(response.error){
+      const selectedModel = modelSelect.value;
+      const modelName = FIREWORKS_MODEL_OPTIONS[selectedModel] || 'unknown';
+      appendMessage('assistant', 
+        `Error: ${sanitizeForDisplay(response.error)}\n\nTrying: ${modelName}`, 
+        'System', 
+        false);
+      return;
+    }
+
+    // Show fallback notification if a fallback model was used
+    if (response.usedFallback) {
+      appendMessage('assistant', 
+        '⚠️ Dobby deployment unavailable. Using Llama 3.1 8B instead. ' +
+        'Check your deployment status at: https://app.fireworks.ai/models', 
+        'System', false);
+    }
+
+    let out = response.text || '';
+    // Basic safe-mode filtering
+    if(safeModeToggle.checked && simpleModerate(out)){
+      out = out.split(/\b/).map(token => {
+        return BANNED.includes(token.toLowerCase()) ? '[REDACTED]' : token;
+      }).join('');
+      out = "[Content redacted due to safety policy]\n\n" + out;
+    }
+
+    // Ensure persona doesn't break; small guard: if model says "I am not X", optionally re-instruct
+    // (we just display what it returns; adjustments can be made later)
+    appendMessage('assistant', sanitizeForDisplay(out), `${PERSONAS[charSelect.value].name} — ${new Date().toLocaleTimeString()}`, true);
+    sessionHistory.push({role:'assistant', content: out});
+
+    // Keep sessionHistory reasonably small
+    if(sessionHistory.length > MAX_HISTORY_TURNS * 2) {
+      sessionHistory = sessionHistory.slice(-MAX_HISTORY_TURNS * 2);
+    }
+  }
+
+  // Event listeners
+  sendBtn.addEventListener('click', sendMessage);
+  msgForm.addEventListener('submit', (e) => { e.preventDefault(); sendMessage(); });
+  clearBtn.addEventListener('click', () => {
+    chatEl.innerHTML = '';
+    sessionHistory = [];
+  });
+  
+  // Update model when selection changes
+  modelSelect.addEventListener('change', () => {
+    const selectedModel = modelSelect.value;
+    appendMessage('assistant', `Switched to model: ${selectedModel}`, 'System', false);
+  });
+
+  // Pre-fill a friendly greeting
+  setTimeout(() => {
+    const personaName = PERSONAS[charSelect.value].name;
+    appendMessage('assistant', `Hello — choose a character and say something. Try: "Tell me about your most memorable discovery."`, `${personaName} ready`, false);
+  }, 200);
+
+  // Allow Ctrl+Enter to send
+  userInput.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { sendMessage(); }
+  });
+
+})();
+</script>
+</body>
+</html>
