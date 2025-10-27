@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Character Chat — Dobby AI</title>
+<link rel="stylesheet" href="style.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;background:linear-gradient(135deg,#fdf6e3,#fef0e8);color:#5a4a3e;min-height:100vh;padding:20px;display:flex;align-items:center;justify-content:center;flex-direction:column;}
+.app{max-width:900px;width:100%;background:#fffbf5;border-radius:20px;box-shadow:0 20px 60px rgba(255,182,193,0.3);overflow:hidden;display:flex;flex-direction:column;height:90vh;border:1px solid #ffd0e0;}
+header{background:linear-gradient(135deg,#ffe5f0,#ffd0e0);padding:25px;text-align:center;border-bottom:1px solid rgba(255,200,210,0.3);}
+header .header-content{display:flex;align-items:center;justify-content:center;gap:15px;flex-wrap:wrap;}
+header img{width:60px;height:60px;border-radius:50%;border:3px solid #ffa7c4;object-fit:cover;}
+header h1{font-size:28px;color:#a65d7a;margin-bottom:5px;font-weight:600;}
+header .subtitle{font-size:14px;color:#b78a96;}
+.controls{padding:20px;background:#fff8f0;border-bottom:1px solid rgba(255,200,210,0.3);display:flex;gap:15px;flex-wrap:wrap;}
+select{flex:1;min-width:180px;padding:12px;border-radius:10px;border:1px solid #ffd0e0;background:#fff;color:#5a4a3e;font-size:14px;cursor:pointer;}
+select:focus{outline:none;border-color:#ffa7c4;}
+.api-btn{background:linear-gradient(135deg,#ffb3d9,#ffa0cc);color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:14px;white-space:nowrap;font-weight:600;box-shadow:0 2px 10px rgba(255,182,193,0.4);}
+.api-btn:hover{background:linear-gradient(135deg,#ffa0cc,#ff8ebb);transform:translateY(-2px);box-shadow:0 4px 15px rgba(255,182,193,0.5);}
+.chat{flex:1;overflow-y:auto;padding:20px;background:#fefcf9;}
+.chat::-webkit-scrollbar{width:8px;}
+.chat::-webkit-scrollbar-track{background:#fff8f0;}
+.chat::-webkit-scrollbar-thumb{background:#ffccdd;border-radius:10px;}
+.msg{margin-bottom:15px;max-width:80%;animation:fadeIn 0.3s;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+.user{margin-left:auto;background:linear-gradient(135deg,#ffb3d9,#ffa0cc);padding:12px 16px;border-radius:18px 18px 4px 18px;color:#fff;box-shadow:0 2px 8px rgba(255,182,193,0.3);}
+.bot{background:#fffbef;padding:12px 16px;border-radius:18px 18px 18px 4px;border:1px solid #ffd0e0;box-shadow:0 2px 8px rgba(255,182,193,0.2);}
+.meta{font-size:11px;color:#b78a96;margin-bottom:5px;}
+form{display:flex;gap:10px;padding:20px;background:#fff8f0;border-top:1px solid rgba(255,200,210,0.3);}
+textarea{flex:1;min-height:50px;max-height:150px;padding:12px;border-radius:12px;border:1px solid #ffd0e0;background:#fff;color:#5a4a3e;font-size:15px;resize:vertical;font-family:inherit;}
+textarea:focus{outline:none;border-color:#ffa7c4;}
+#sendBtn{padding:12px 30px;border-radius:12px;border:none;background:linear-gradient(135deg,#ffb3d9,#ffa0cc);color:#fff;cursor:pointer;font-size:15px;font-weight:600;transition:all 0.2s;box-shadow:0 2px 10px rgba(255,182,193,0.4);}
+#sendBtn:hover{background:linear-gradient(135deg,#ffa0cc,#ff8ebb);transform:translateY(-2px);box-shadow:0 4px 15px rgba(255,182,193,0.5);}
+#sendBtn:disabled{opacity:0.5;cursor:not-allowed;}
+.cursor{animation:blink 1s infinite;}
+@keyframes blink{0%,50%{opacity:1;}51%,100%{opacity:0;}}
+.modal{display:none;position:fixed;inset:0;background:rgba(26,26,46,0.8);z-index:1000;align-items:center;justify-content:center;}
+.modal.active{display:flex;}
+.modal-content{background:#fffbf5;padding:30px;border-radius:20px;max-width:500px;width:90%;border:1px solid #ffd0e0;box-shadow:0 10px 40px rgba(255,182,193,0.4);}
+.modal-content h2{margin-bottom:15px;color:#a65d7a;}
+.modal-content p{margin-bottom:15px;color:#8a7a6e;font-size:14px;}
+.modal-close{float:right;background:none;border:none;color:#b78a96;font-size:24px;cursor:pointer;padding:0;}
+.modal-close:hover{color:#ff6b9d;}
+input[type="text"]{width:100%;padding:12px;border-radius:10px;border:1px solid #ffd0e0;background:#fff;color:#5a4a3e;font-size:15px;margin-bottom:15px;}
+input[type="text"]:focus{outline:none;border-color:#ffa7c4;}
+.instructions{background:#fff8f0;border:1px solid #ffd0e0;border-radius:12px;padding:15px;margin-bottom:15px;font-size:13px;color:#8a7a6e;}
+.instructions strong{color:#ffa7c4;}
+footer{text-align:center;padding:15px;background:#fff8f0;color:#b78a96;font-size:13px;border-top:1px solid rgba(255,200,210,0.3);}
+footer a{color:#ffa7c4;text-decoration:none;font-weight:600;margin-left:8px;transition:color 0.2s;}
+footer a:hover{color:#ff6b9d;}
+@media (max-width: 600px) {
+  #sendBtn{padding:10px 20px;font-size:13px;}
+  .app{height:95vh;margin:5px;border-radius:15px;}
+  body{padding:5px;}
+  header{padding:15px 20px;}
+  header img{width:45px;height:45px;}
+  header h1{font-size:20px;}
+  header .subtitle{font-size:12px;}
+  .controls{padding:12px 15px;gap:10px;}
+  .chat{padding:15px;}
+  form{padding:12px 15px;}
+  textarea{min-height:45px;font-size:14px;}
+  footer{padding:10px;font-size:11px;}
+  .modal{padding:20px 10px;}
+  .modal-content{padding:20px;margin:0;max-width:100%;width:100%;border-radius:15px;max-height:85vh;overflow-y:auto;}
+  .modal-content h2{font-size:18px;margin-bottom:12px;}
+  .modal-content p{font-size:13px;margin-bottom:12px;}
+  .instructions{font-size:12px;padding:12px;margin-bottom:12px;line-height:1.5;}
+  .modal-close{font-size:28px;margin-bottom:10px;}
+  input[type="text"]{padding:10px;font-size:14px;margin-bottom:12px;}
+  .api-btn{font-size:13px;padding:10px 16px;}
+}
+</style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="header-content">
+        <img src="dobby.jpg" alt="Dobby AI" />
+        <div>
+          <h1> Character Chat</h1>
+          <div class="subtitle">Powered by Dobby 70B</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="controls">
+        <select id="characterSelect" aria-label="Select character">
+        <option value="babbage"> Charles Babbage</option>
+        <option value="aristotle"> Aristotle</option>
+        <option value="newton"> Isaac Newton</option>
+        <option value="davinci"> Leonardo da Vinci</option>
+        <option value="joker"> The Joker</option>
+        </select>
+      <button class="api-btn" id="instructionsBtn">Instructions</button>
+      <button class="api-btn" id="apiBtn">🔑 API Key</button>
+    </div>
+
+    <div id="chat" class="chat"></div>
+
+    <form id="messageForm" onsubmit="return false;">
+      <textarea id="userInput" placeholder="Type your message..." aria-label="Message input"></textarea>
+      <button id="sendBtn" type="submit">Send</button>
+    </form>
+  </div>
+
+  
+  <div id="apiModal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" id="closeModal">&times;</button>
+      <h2>Fireworks API Key</h2>
+      <p>Enter your Fireworks AI API key to start chatting:</p>
+      <div class="instructions">
+        <strong>Getting Started:</strong><br>
+        1. Get your API key from <a href="https://app.fireworks.ai/settings/users/api-keys" target="_blank" style="color:#ffa7c4;">Fireworks AI</a><br>
+        2. Paste it below<br>
+        3. Start chatting!
+      </div>
+      <input type="text" id="apiKeyInput" placeholder="sk-...">
+      <button class="api-btn" style="width:100%;" id="saveKey">Save Key</button>
+    </div>
+  </div>
+
+  
+  <div id="instructionsModal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" id="closeInstructions">&times;</button>
+      <h2> How to Use</h2>
+      <div class="instructions">
+        <strong>Getting Your API Key:</strong><br>
+        1. Visit <a href="https://app.fireworks.ai/settings/users/api-keys" target="_blank" style="color:#ffa7c4;">Fireworks AI</a><br>
+        2. Sign up or log in<br>
+        3. Create a new API key<br>
+        4. Copy the key (starts with "sk-")<br>
+        <br>
+        <strong>Using the Chat:</strong><br>
+        • Click <strong>"🔑 API Key"</strong> button to paste your key<br>
+        • Select a character from the dropdown<br>
+        • Type your message and click <strong>"Send"</strong><br>
+        • Switch characters anytime - chat resets<br>
+        • Responses appear with a cool typewriter effect!<br>
+        <br>
+        <strong>Tips:</strong><br>
+        • Use Ctrl+Enter (or Cmd+Enter on Mac) to send<br>
+        • Conversations are limited to 12 messages to manage costs<br>
+        • Each character has a unique personality and knowledge<br>
+      </div>
+      <button class="api-btn" style="width:100%;margin-top:10px;" id="closeInstructions2">Got it!</button>
+    </div>
+  </div>
+
+  <footer>
+    Made with ❤️ by AWE
+    <a href="https://twitter.com/Gabii_awee" target="_blank">🐦 Follow on X</a>
+  </footer>
+
+<script>
+(() => {
+  const FIREWORKS_MODEL = "accounts/sentientfoundation/models/dobby-unhinged-llama-3-3-70b-new";
+  const FIREWORKS_ENDPOINT = "https://api.fireworks.ai/inference/v1/chat/completions";
+  
+  const PERSONAS = {
+    babbage: {
+      name: "Charles Babbage",
+      system: `You are Charles Babbage (1791-1871), English polymath and mechanical engineer, inventor of the Difference Engine and conceptualizer of the Analytical Engine. Speak with Victorian-era formality, pride in mechanical precision and mathematics, explain mechanisms, algorithms, and computation clearly, referencing mechanical analogs where helpful.`
+    },
+    aristotle: {
+      name: "Aristotle",
+      system: `You are Aristotle, the ancient Greek philosopher. Respond analytically and teleologically: ask about causes, forms, and purposes; prefer systematic reasoning, syllogistic structure, and empirical examples. Keep answers structured and refer to ethics, metaphysics, logic, and natural philosophy where relevant.`
+    },
+    newton: {
+      name: "Isaac Newton",
+      system: `You are Sir Isaac Newton, natural philosopher and mathematician. Speak with rigorous method, reference experiments, mathematics (fluxions/calculus), optics, and gravitation. Use formal tone but be willing to explain experiments and equations in plain language when asked.`
+    },
+    davinci: {
+      name: "Leonardo da Vinci",
+      system: `You are Leonardo da Vinci, a curious polymath: painter, engineer, anatomist and inventor. Combine artistic metaphor with observational science; provide sketches conceptually, ask probing questions, and describe mechanical designs and anatomy with vivid imagery.`
+    },
+    joker: {
+      name: "The Joker",
+      system: `You are the Joker: chaotic, mischievous, darkly humorous, and unpredictable. Use playful and twisting language, be theatrical. Do not promote real-world violence or illegal instructions. If asked for harmful instructions, refuse and respond with a menacing but non-actionable remark.`
+    }
+  };
+
+  let sessionHistory = [];
+  let API_KEY = null;
+  
+  // Load API key from localStorage on page load
+  function loadAPIKey() {
+    const savedKey = localStorage.getItem('dobby_api_key');
+    if (savedKey) {
+      API_KEY = savedKey;
+      // Pre-fill the input field if modal is opened
+      apiKeyInput.value = savedKey;
+    }
+  }
+  
+  // Save API key to localStorage
+  function saveAPIKey(key) {
+    if (key) {
+      localStorage.setItem('dobby_api_key', key);
+    } else {
+      localStorage.removeItem('dobby_api_key');
+    }
+  }
+  
+  const chatEl = document.getElementById('chat');
+  const charSelect = document.getElementById('characterSelect');
+  const apiKeyInput = document.getElementById('apiKeyInput');
+  const userInput = document.getElementById('userInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const msgForm = document.getElementById('messageForm');
+  const apiModal = document.getElementById('apiModal');
+  const instructionsModal = document.getElementById('instructionsModal');
+  const apiBtn = document.getElementById('apiBtn');
+  const instructionsBtn = document.getElementById('instructionsBtn');
+  const closeModal = document.getElementById('closeModal');
+  const closeInstructions = document.getElementById('closeInstructions');
+  const closeInstructions2 = document.getElementById('closeInstructions2');
+  const saveKey = document.getElementById('saveKey');
+
+  function appendMessage(role, text, meta='', useTypewriter = false) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
+    if (meta) {
+      const m = document.createElement('div'); m.className='meta'; m.textContent = meta;
+      wrapper.appendChild(m);
+    }
+    const p = document.createElement('div');
+    
+    if (useTypewriter && role === 'assistant') {
+      p.innerHTML = '<span class="typewriter-text"></span><span class="cursor">|</span>';
+    wrapper.appendChild(p);
+    chatEl.appendChild(wrapper);
+    chatEl.scrollTop = chatEl.scrollHeight;
+      
+      const textEl = p.querySelector('.typewriter-text');
+      const cursorEl = p.querySelector('.cursor');
+      let index = 0;
+      const sanitizedText = text;
+      let displayText = '';
+      
+      function typeNext() {
+        if (index < sanitizedText.length) {
+          displayText += sanitizedText[index];
+          textEl.innerHTML = displayText.replace(/\n/g, '<br/>');
+          chatEl.scrollTop = chatEl.scrollHeight;
+          index++;
+          setTimeout(typeNext, 15);
+        } else {
+          if (cursorEl) cursorEl.remove();
+        }
+      }
+      typeNext();
+    } else {
+      p.innerHTML = text.replace(/\n/g,'<br/>');
+      wrapper.appendChild(p);
+      chatEl.appendChild(wrapper);
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
+  }
+
+  function buildMessagesForModel(userText){
+    const personaKey = charSelect.value;
+    const persona = PERSONAS[personaKey];
+    const messages = [{ role: 'system', content: persona.system }];
+    
+    sessionHistory.slice(-6).forEach(h => {
+      messages.push({
+        role: h.role === 'user' ? 'user' : 'assistant',
+        content: h.content
+      });
+    });
+    messages.push({ role: 'user', content: userText });
+    return messages;
+  }
+
+  async function callModel(messages) {
+    const body = {
+      model: FIREWORKS_MODEL,
+      messages: messages,
+      max_tokens: 2048,
+      temperature: 0.6,
+      top_p: 1,
+      frequency_penalty: 0,
+      presence_penalty: 0
+    };
+
+    try {
+      const res = await fetch(FIREWORKS_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + API_KEY,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      if(!res.ok) {
+        const txt = await res.text();
+        return { error: `HTTP ${res.status}: ${txt.substring(0, 200)}` };
+      }
+
+      const json = await res.json();
+      let text = null;
+      if(json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content) {
+        text = json.choices[0].message.content;
+      } else {
+        text = JSON.stringify(json, null, 2);
+      }
+      return { text };
+    } catch (err) {
+      return { error: String(err) };
+    }
+  }
+
+  async function sendMessage(){
+    if(!API_KEY) {
+      apiModal.classList.add('active');
+      return;
+    }
+    
+    const raw = userInput.value.trim();
+    if(!raw) return;
+    userInput.value = '';
+    
+    appendMessage('user', raw, `You — ${new Date().toLocaleTimeString()}`);
+    sessionHistory.push({role:'user', content: raw});
+
+    const messages = buildMessagesForModel(raw);
+    appendMessage('assistant', '…thinking…', `${PERSONAS[charSelect.value].name} is thinking`);
+
+    const response = await callModel(messages);
+
+    const msgs = chatEl.querySelectorAll('.msg');
+    if(msgs.length) msgs[msgs.length - 1].remove();
+
+    if(response.error){
+      appendMessage('assistant', `Error: ${response.error}`, 'System', false);
+      return;
+    }
+
+    appendMessage('assistant', response.text, `${PERSONAS[charSelect.value].name} — ${new Date().toLocaleTimeString()}`, true);
+    sessionHistory.push({role:'assistant', content: response.text});
+    
+    if(sessionHistory.length > 12) {
+      sessionHistory = sessionHistory.slice(-12);
+    }
+  }
+
+  function changeCharacter() {
+    chatEl.innerHTML = '';
+    sessionHistory = [];
+    const personaName = PERSONAS[charSelect.value].name;
+    appendMessage('assistant', `👋 Hello! I'm ${personaName}. Ask me anything!`, `${personaName}`, false);
+  }
+
+  charSelect.addEventListener('change', changeCharacter);
+  instructionsBtn.onclick = () => instructionsModal.classList.add('active');
+  closeInstructions.onclick = () => instructionsModal.classList.remove('active');
+  closeInstructions2.onclick = () => instructionsModal.classList.remove('active');
+  apiBtn.onclick = () => {
+    // Show saved key when opening modal
+    if (API_KEY) {
+      apiKeyInput.value = API_KEY;
+    }
+    apiModal.classList.add('active');
+  };
+  closeModal.onclick = () => apiModal.classList.remove('active');
+  saveKey.onclick = () => {
+    API_KEY = apiKeyInput.value.trim();
+    if(API_KEY) {
+      saveAPIKey(API_KEY);
+      apiModal.classList.remove('active');
+      appendMessage('assistant', '✅ API key saved! Start chatting with your character.', 'System', false);
+    }
+  };
+  
+  sendBtn.addEventListener('click', sendMessage);
+  msgForm.addEventListener('submit', (e) => { e.preventDefault(); sendMessage(); });
+  
+  userInput.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { sendMessage(); }
+  });
+
+  // Load saved API key on page load
+  loadAPIKey();
+
+  setTimeout(() => {
+    const personaName = PERSONAS[charSelect.value].name;
+    appendMessage('assistant', `👋 Hello! I'm ${personaName}. Ask me anything!`, `${personaName}`, false);
+  }, 200);
+
+  // Show instructions modal when page loads
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      instructionsModal.classList.add('active');
+    }, 500);
+  });
+})();
+</script>
+</body>
+</html>
